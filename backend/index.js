@@ -96,6 +96,6 @@ app.get('/', (req, res) => {
   res.send('<h1>Welcome to the Todo API</h1><p>Go to <a href="/todos">/todos</a> to see the data.</p>');
 });
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Todo API server running on http://0.0.0.0:${PORT}`);
+app.listen(PORT, () => {
+  console.log(`🚀 Todo API server running on http://localhost:${PORT}`);
 });

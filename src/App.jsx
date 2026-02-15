@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 
-const API_URL = 'http://localhost:3001';
+// Using an environment variable for the URL makes Render deployment easier
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 function App() {
   const [todos, setTodos] = useState([]);
@@ -61,8 +62,9 @@ function App() {
     }
   };
 
+  // Changed 'id' to '_id' to match MongoDB
   const toggleTodo = async (id) => {
-    const todoToUpdate = todos.find(t => t.id === id);
+    const todoToUpdate = todos.find(t => t._id === id);
     try {
       const res = await fetch(`${API_URL}/todos/${id}`, {
         method: 'PUT',
@@ -71,17 +73,18 @@ function App() {
       });
       if (!res.ok) throw new Error('Failed to update todo');
       const updatedTodo = await res.json();
-      setTodos(todos.map(t => t.id === id ? updatedTodo : t));
+      setTodos(todos.map(t => t._id === id ? updatedTodo : t));
     } catch (err) {
       setError(err.message);
     }
   };
 
+  // Changed 'id' to '_id' to match MongoDB
   const deleteTodo = async (id) => {
     try {
       const res = await fetch(`${API_URL}/todos/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete todo');
-      setTodos(todos.filter(t => t.id !== id));
+      setTodos(todos.filter(t => t._id !== id));
     } catch (err) {
       setError(err.message);
     }
@@ -183,13 +186,14 @@ function App() {
 
         {/* Todos Grid */}
         <div className="todos-grid">
+          {/* Changed key to todo._id */}
           {todos.map(todo => (
-            <div key={todo.id} className={`todo-card ${todo.completed ? 'completed' : ''}`} style={{ borderTopColor: getCategoryColor(todo.category) }}>
+            <div key={todo._id} className={`todo-card ${todo.completed ? 'completed' : ''}`} style={{ borderTopColor: getCategoryColor(todo.category) }}>
               <div className="todo-header">
                 <span className="priority-badge">{getPriorityEmoji(todo.priority)}</span>
-                <button onClick={() => deleteTodo(todo.id)} className="delete-btn" aria-label="Delete todo">×</button>
+                <button onClick={() => deleteTodo(todo._id)} className="delete-btn" aria-label="Delete todo">×</button>
               </div>
-              <div className="todo-content" onClick={() => toggleTodo(todo.id)}>
+              <div className="todo-content" onClick={() => toggleTodo(todo._id)}>
                 <div className={`checkbox ${todo.completed ? 'checked' : ''}`}>{todo.completed && <span className="checkmark">✓</span>}</div>
                 <p className="todo-text">{todo.text}</p>
               </div>

@@ -1,101 +1,105 @@
-const fs = require('fs');
-const path = require('path');
-const TODOS_FILE = path.join(__dirname, 'todos.json');
-
-// Load todos from JSON file
-let todos = [];
-let nextId = 1;
-
-try {
-  const data = fs.readFileSync(TODOS_FILE, 'utf-8');
-  todos = JSON.parse(data);
-  // update nextId so new todos get unique IDs
-  nextId = todos.length > 0 ? Math.max(...todos.map(t => t.id)) + 1 : 1;
-} catch (err) {
-  console.log('No existing todos file, starting fresh.');
-}
-
-// Helper to save todos to file
-const saveTodos = () => {
-  fs.writeFileSync(TODOS_FILE, JSON.stringify(todos, null, 2));
-};
-
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
+require('dotenv').config();
 
 const app = express();
-const PORT = 3001;
+// Render uses process.env.PORT, so we use that or 3001 locally
+const PORT = process.env.PORT || 3001; 
 
-// Middleware
+// 1. Middleware
 app.use(cors());
 app.use(express.json());
 
+// 2. MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ Connected to MongoDB Atlas"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
 
-// GET /todos - Get all todos
-app.get('/todos', (req, res) => {
-  res.json(todos);
+// 3. Define the Todo Schema (The blueprint for your data)
+const todoSchema = new mongoose.Schema({
+  text: { type: String, required: true },
+  completed: { type: Boolean, default: false },
+  category: { type: String, default: 'personal' },
+  priority: { type: String, default: 'medium' }
 });
 
-// POST /todos - Add a new todo
-app.post('/todos', (req, res) => {
+const Todo = mongoose.model('Todo', todoSchema);
+
+// 4. API Routes
+
+// GET /todos - Get all todos from MongoDB
+app.get('/todos', async (req, res) => {
+  try {
+    const todos = await Todo.find();
+    res.json(todos);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch todos' });
+  }
+});
+
+// POST /todos - Add a new todo to MongoDB
+app.post('/todos', async (req, res) => {
   const { text, category, priority } = req.body;
 
   if (!text || text.trim() === '') {
     return res.status(400).json({ error: 'Todo text is required' });
   }
 
-  const newTodo = {
-    id: nextId++,
-    text: text.trim(),
-    completed: false,
-    category: category || 'personal',
-    priority: priority || 'medium'
-  };
+  try {
+    const newTodo = new Todo({
+      text: text.trim(),
+      completed: false,
+      category: category || 'personal',
+      priority: priority || 'medium'
+    });
 
-    todos.push(newTodo);
-    saveTodos(); // <— save after adding
+    await newTodo.save(); // Saves to the cloud database
     res.status(201).json(newTodo);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save todo' });
+  }
 });
 
-// PUT /todos/:id - Toggle completed, optionally update category/priority
-app.put('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const todo = todos.find(t => t.id === id);
+// PUT /todos/:id - Toggle completed
+app.put('/todos/:id', async (req, res) => {
+  try {
+    const todo = await Todo.findById(req.params.id);
+    if (!todo) return res.status(404).json({ error: 'Todo not found' });
 
-  if (!todo) return res.status(404).json({ error: 'Todo not found' });
-
-  // Toggle completed
     todo.completed = !todo.completed;
-    saveTodos(); // <— save after toggling
+    
+    if (req.body.category) todo.category = req.body.category;
+    if (req.body.priority) todo.priority = req.body.priority;
+
+    await todo.save();
     res.json(todo);
-
-  // Optional updates
-  if (req.body.category) todo.category = req.body.category;
-  if (req.body.priority) todo.priority = req.body.priority;
-
-  res.json(todo);
+  } catch (err) {
+    res.status(500).json({ error: 'Update failed' });
+  }
 });
 
 // DELETE /todos/:id - Delete a todo
-app.delete('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const index = todos.findIndex(t => t.id === id);
-
-  if (index === -1) return res.status(404).json({ error: 'Todo not found' });
-
-    todos.splice(index, 1);
-    saveTodos(); // <— save after deleting
+app.delete('/todos/:id', async (req, res) => {
+  try {
+    const deletedTodo = await Todo.findByIdAndDelete(req.params.id);
+    if (!deletedTodo) return res.status(404).json({ error: 'Todo not found' });
     res.json(deletedTodo);
+  } catch (err) {
+    res.status(500).json({ error: 'Delete failed' });
+  }
 });
 
-// Health check endpoint
+// Health check and root
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
 });
+
 app.get('/', (req, res) => {
   res.send('<h1>Welcome to the Todo API</h1><p>Go to <a href="/todos">/todos</a> to see the data.</p>');
 });
-// Start server
+
+// 5. Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Todo API server running on http://localhost:${PORT}`);
+  console.log(`🚀 Todo API server running on port ${PORT}`);
 });
